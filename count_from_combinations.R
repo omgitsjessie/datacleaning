@@ -22,13 +22,13 @@ strings <- c("string1, string2", "string1",
              "string2, string3, string4, string5", 
              "string4, string5", 
              "string5")
-
-
 df <- cbind(values, strings) %>% 
         as.data.table()
-#Find number of strings in the longest row
-longest_combo <- max(sapply(strsplit(as.character(df$strings), ','), length))
 
+#Remove whitespace
+df$strings <- as.data.table(gsub(" ", "", df$strings, fixed = TRUE))
+
+#Find number of strings in the longest row
 longest_combo <- df$strings %>% 
                    as.character() %>% 
                    strsplit(',') %>%
@@ -36,7 +36,7 @@ longest_combo <- df$strings %>%
                    max()
 
 #split strings on delimiter in individual columns
-separate(data = df, col = strings, into = paste0('x', 1:longest_combo), 
+df <- separate(data = df, col = strings, into = paste0('x', 1:longest_combo), 
          sep = ',', fill = 'right', convert = TRUE) 
 
 #After splitting it, the data format to:
@@ -48,14 +48,53 @@ separate(data = df, col = strings, into = paste0('x', 1:longest_combo),
 # 5:     10 string5       NA       NA       NA
 
 
-#for each row of df, fill in new table with cell 1 [value], 
-#then for each column 'xn' create a new row with its df row's value.
+#how long will the new long table be?  
+#(Num non-NA cells) - (cells with values) = (num rows in new table)
+df.seprows <- sum(!is.na(df)) - nrow(df)
 
-df.separated <- data.frame()
+#initialize a new data table 2 cols wide, and as long as it will need to be.
+df.separated <- data.table(matrix(ncol = 2, nrow = df.seprows))
+#name the columns "values" and "strings".
+colnames <- c("values","strings")
+names(df.separated) <- colnames
+df.separated$values <- as.numeric(df.separated$values)
+df.separated$strings <- as.character(df.separated$strings)
 
-for (i in 1:nrows(df$values)) {
-  for (j in 2:sum(!is.na(df[i,]))) {
-    #TODO - df.separated[i,1] <- df[i,(j-1)]
+k = 1                                 #k will be the kth row of our new table
+for (i in 1:length(df$values)) {       #For each row,
+  for (j in 2:sum(!is.na(df[i,]))) {  #For each column containing a string,
+    df.separated[k,1] <- df[i, 1, with = FALSE]  #assign the value to [k,1]
+    df.separated[k,2] <- df[i, j, with = FALSE]  #assign the string to [k,2]
+    k <- k + 1                        #move on to the next string in the row.
   }
 }
-  
+
+# df.separated now looks like!
+# values  strings
+# 111     string1
+# 111     string2
+# 4       string1
+# 31      string2
+# 31      string3
+# 31      string4
+# 31      string5
+# 14      string4
+# 14      string5
+# 10      string5
+
+df.separated$strings <- as.factor(df.separated$strings)
+
+df2 <- df.separated %>%
+  group_by(strings) %>%
+  summarise(stringVar = sum(values))
+
+# Voila!!  df2 now looks like:  
+# # A tibble: 5 x 2
+# strings stringVar
+# <fctr>     <dbl>
+# string1       115
+# string2       142
+# string3        31
+# string4        45
+# string5        55
+
